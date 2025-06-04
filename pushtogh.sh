@@ -2,7 +2,7 @@
 
 git add . -v
 if [ -z "$1" ]; then
-    comment="autocomment:$RANDOM$RANDOM" 
+    comment="bla:$RANDOM$RANDOM" 
     git commit -m "$comment"
     echo "pushing with comment: $comment" 
 else
