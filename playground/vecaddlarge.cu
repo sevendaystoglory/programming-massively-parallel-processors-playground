@@ -33,7 +33,7 @@ int main(){
     cudaMemcpy(dA, A, size * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(dB, B, size * sizeof(int), cudaMemcpyHostToDevice);
 
-    int threads_per_block = 64; //because 64 cores in one SM
+    int threads_per_block = 1024; //because 64 cores in one SM
     
     int gridDim = size / threads_per_block + 1; // one extra block jic
     printf("gridDim: %d\n", gridDim);
@@ -42,7 +42,7 @@ int main(){
     VecAdd<<<gridDim, blockDim>>>(dA, dB, dC);
     seeCUDAerror;
     // Copy result back to host
-    cudaMemcpy(C, dC, size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(C, dC, size * sizeof(int), cudaMemcpyDeviceToHost);
     print_array(A, B, C);
     return 0;
 }
