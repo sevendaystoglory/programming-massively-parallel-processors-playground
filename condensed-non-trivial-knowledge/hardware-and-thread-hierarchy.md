@@ -1,4 +1,4 @@
-We start by first learning about the GPGPU architecture. Refer to this [amazing series](9https://www.youtube.com/watch?v=1Goq8Yc3dfo) on YT.
+We start by first learning about the GPGPU architecture. Refer to this [amazing series](https://www.youtube.com/watch?v=1Goq8Yc3dfo) on YT.
 
 ## Standard GPU Architecture
 The standard consumer GPU, the GTX 1650ti for example has the following hardware components.
