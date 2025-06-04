@@ -8,3 +8,5 @@ part 2: ch 2 (remaining); ch 3 (remaining), ch 8
 
 1. playground has some scripts/demos
 2. condensed-non-trivial-knowledge has some of my personal takeaways from certain sections of the book
+
+we will use nvcc to compile the code. see execute.sh
