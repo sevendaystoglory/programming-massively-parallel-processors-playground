@@ -14,9 +14,9 @@ __global__ void matmul(int *A, int *B, int *C){
     int idx = i*N + j;
     if(i < N && j < N){
         C[idx] = 0;
-            for(int k=0; k < N; k++){
-                C[idx] += A[i*N+k] * B[k*N + j];
-            }
+        for(int k=0; k < N; k++){
+            C[idx] += A[i*N+k] * B[k*N + j];
+        }
     }
 }
 
@@ -70,5 +70,4 @@ void printMatrices(int **A, int **B, int **C){
     for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", B[i][j]);}}
     printf("\nMatrix C");
     for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", C[i][j]);}}
-
 }
