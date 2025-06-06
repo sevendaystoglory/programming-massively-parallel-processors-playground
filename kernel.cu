@@ -1,12 +1,13 @@
 #include <stdio.h>
+#include <time.h>
 
-#define N 1 << 28 // 2^28 ~ 268M elements. ~3 GiB for 3 arrays.
+#define N 1 << 20 // 2^28 ~ 268M elements. ~3 GiB for 3 arrays.
 
 // we shall understand thread hierarchy
 __global__ void VecAdd(int* A, int* B, int * C){
-    int i = threadIdx.x + blockIdx.x * blockDim.x;
-    if (i<N){ // because we had considered some extra threads in the final block
-    C[i] = A[i] + B[i];
+    int start = threadIdx.x + blockIdx.x * blockDim.x;
+    for(int i = start; i<N; i+=blockDim.x * gridDim.x){ // for a lower grid dim as imposed by the min, we have a longer running kernel
+        C[i] = A[i] + B[i];    
     }
 }
 
@@ -34,16 +35,22 @@ int main(){
     cudaMemcpy(dB, B, size * sizeof(int), cudaMemcpyHostToDevice);
 
     int threads_per_block = 64; //because 64 cores in one SM
-    
-    int gridDim = size / threads_per_block + 1; // one extra block jic
+    int sm_count = 14;
+    int gridDim = min(32*sm_count , size / threads_per_block + 1); // 
     printf("gridDim: %d\n", gridDim);
     int blockDim = threads_per_block;
     // launch kernel
+    clock_t start = clock();
     VecAdd<<<gridDim, blockDim>>>(dA, dB, dC);
+    clock_t end = clock();
     seeCUDAerror;
     // Copy result back to host
     cudaMemcpy(C, dC, size, cudaMemcpyDeviceToHost);
     print_array(A, B, C);
+
+    double time_spent = (double)(end - start) / CLOCKS_PER_SEC;
+    printf("\nTime taken: %f seconds\n", time_spent);
+
     return 0;
 }
 

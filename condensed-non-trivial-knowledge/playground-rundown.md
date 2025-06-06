@@ -1,3 +1,4 @@
 following are the kernels inplemented in the playground:
 1. [vecaddlarge](../playground/vecaddsingle.cu) to add two vectors using a single threadblock. 
-2. [vecaddlarge](../playground/vecaddlarge.cu) to add two 1GiB vectors using multiple threadblocks. ~4% GPU util. ~3.3GiB memory.
+2. [vecaddlarge](../playground/vecaddlarge.cu) to add two 1GiB vectors using multiple threadblocks. ~4% GPU util. ~3.3GiB memory. we really can't do shite about it because adding two vectors is fundamentally a memory bound task. you have to move 12 bytes per operation. we can however increase the blockDim to 1024 and let each CUDA core manage context swtich. this is called latency tolerance. we could also have each kernel run longer by reducing the gridDim to impose at max 16 blocks per SM. this won't save latency at all just that each kernel would now fill more C[i] sequentially.
+3. 

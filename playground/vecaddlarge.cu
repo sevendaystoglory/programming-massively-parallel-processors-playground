@@ -6,7 +6,7 @@
 __global__ void VecAdd(int* A, int* B, int * C){
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     if (i<N){ // because we had considered some extra threads in the final block
-    C[i] = A[i] + B[i];
+    C[i] = A[i] + B[i]; // we are performing a single operation fro 12 bytes of data moved to the global memory. slow af.
     }
 }
 
@@ -32,9 +32,7 @@ int main(){
     // Copy input arrays to GPU
     cudaMemcpy(dA, A, size * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(dB, B, size * sizeof(int), cudaMemcpyHostToDevice);
-
-    int threads_per_block = 1024; //because 64 cores in one SM
-    
+    int threads_per_block = 1024; //because 64 cores in one SM. we want multiple threads to be assigned to a single core because gpu is designed for latency tolerance. 
     int gridDim = size / threads_per_block + 1; // one extra block jic
     printf("gridDim: %d\n", gridDim);
     int blockDim = threads_per_block;

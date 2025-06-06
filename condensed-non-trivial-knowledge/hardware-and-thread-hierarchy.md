@@ -24,3 +24,10 @@ Grid: Thread blocks can themselves be organized into 1D, 2D or 3D grids. Size of
 - threadIdx: index for a thread in a block
 - blockIdx:index for a block in a grid
 - blockDim: range of threadIdx
+
+In the matrixadd.cu script, we prefer converting all matrices to a row major layout. This is because CUDA prefers to work with contiguous memory.
+
+
+---
+### Good Reads
+[how fast can we perform as froward pass](https://bounded-regret.ghost.io/how-fast-can-we-perform-a-forward-pass)
