@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <time.h>
 
+// This modification does non-coalescing acceses in the kernel
+
 // we are mutliplying two NxN matrices
 #define N (1<<14) 
 
