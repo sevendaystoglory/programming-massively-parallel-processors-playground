@@ -47,7 +47,7 @@ int main(){
     for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){hA[i*N+j] = rand()%13;}}
     for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){hB[i*N+j] = rand()%13;}}
 
-    int *dA, *dB, *dC;
+    void *dA, *dB, *dC;
     cudaMalloc(&dA, sizeof(int)*N*N);
     cudaMalloc(&dB, sizeof(int)*N*N);
     cudaMalloc(&dC, sizeof(int)*N*N);
