@@ -49,13 +49,12 @@ int main(){
 
     cudaMemcpy(dA, hA, sizeof(float)*M*N, cudaMemcpyHostToDevice);
     cudaMemcpy(dB, hB, sizeof(float)*M*N, cudaMemcpyHostToDevice);
-    cudaMemcpy(dC, hC, sizeof(float)*M*N, cudaMemcpyHostToDevice);
 
     dim3 blockDim(1, 32, 32);
     dim3 gridDim(1, M/32, N/32);
     matAdd<<<gridDim, blockDim>>>(dA, dB, dC);
 
-    cudaMemcpy(hC, dC, sizeof(float)*M*N, cudaMemcpyHostToDevice);
+    cudaMemcpy(dC, hC, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
     float **C = (float**)malloc(sizeof(float*)*M);
     for(int i=0;i<M;i++){C[i] = (float*)malloc(sizeof(float)*N);for(int j = 0; j < N; j++){C[i][j] = hC[j+i*M];}}
 
