@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <time.h>
 
-#define N (1<<14)
+#define N (1<<10)
 #define tile_size 16
 
 void printMatrices(int A[N][N], int B[N][N], int C[N][N]);
@@ -37,9 +37,13 @@ __global__ void matMulTiled(int *A, int *B, int*C){
 
 int main(){
     int *hA, *hB, *hC;
-    hA = (int*)malloc(sizeof(int)*N*N);
-    hB = (int*)malloc(sizeof(int)*N*N);
-    hC = (int*)malloc(sizeof(int)*N*N);
+    // hA = (int*)malloc(sizeof(int)*N*N);
+    // hB = (int*)malloc(sizeof(int)*N*N);
+    // hC = (int*)malloc(sizeof(int)*N*N);
+    // we can switch to pinned memory. this optimizes memory accesses to 
+    cudaMallocHost(&hA, sizeof(int)*N*N);
+    cudaMallocHost(&hB, sizeof(int)*N*N);
+    cudaMallocHost(&hC, sizeof(int)*N*N);
     for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){hA[i*N+j] = rand()%13;}}
     for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){hB[i*N+j] = rand()%13;}}
 
@@ -47,7 +51,7 @@ int main(){
     cudaMalloc(&dA, sizeof(int)*N*N);
     cudaMalloc(&dB, sizeof(int)*N*N);
     cudaMalloc(&dC, sizeof(int)*N*N);
-
+    
     cudaMemcpy(dA, hA, sizeof(int)*N*N, cudaMemcpyHostToDevice);
     cudaMemcpy(dB, hB, sizeof(int)*N*N, cudaMemcpyHostToDevice);
     
