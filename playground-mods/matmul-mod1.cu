@@ -1,23 +1,25 @@
 #include <stdio.h>
 #include <time.h>
 
-// This modification does non-coalescing acceses in the kernel
+// This modification does coalesced memory acccesses
 
-// we are mutliplying two NxN matrices
+// we are mutliplying two NxN matrices ; C = A X B
 #define N (1<<14) 
 
 // Row Major conversion: A[i][j] --> A[i * N + j]
+// Column Major conversion: B[i][j] --> B[j * M + i]
 
 void printMatrices(int **A, int **B, int **C);
 
 __global__ void matmul(int *A, int *B, int *C){
+    // A is Row major, B is Column major
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
     int idx = i*N + j;
     if(i < N && j < N){
         C[idx] = 0;
             for(int k=0; k < N; k++){
-                C[idx] += A[i*N+k] * B[k*N + j];
+                C[idx] += A[i*N+k] * B[j*N + k]; // C is formed in a row major format
             }
     }
 }
@@ -34,8 +36,8 @@ int main(){
     hA = (int*)malloc(sizeof(int)*N*N);
     hB = (int*)malloc(sizeof(int)*N*N);
     hC = (int*)malloc(sizeof(int)*N*N);
-    for(int i = 0; i<N; i++){for(int j = 0; j<N; j++){hA[i*N+j] = A[i][j];}};
-    for(int i = 0; i<N; i++){for(int j = 0; j<N; j++){hB[i*N+j] = B[i][j];}};
+    for(int i = 0; i<N; i++){for(int j = 0; j<N; j++){hA[i*N+j] = A[i][j];}}; // row major
+    for(int i = 0; i<N; i++){for(int j = 0; j<N; j++){hB[j*N+i] = B[i][j];}}; // column major
 
     int *dA, *dB, *dC;
 
