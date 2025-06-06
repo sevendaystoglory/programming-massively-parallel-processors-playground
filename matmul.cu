@@ -46,19 +46,19 @@ int main(){
     
     matmul<<<gridDim, blockDim>>>(dA, dB, dC);
     
-    cudaMemcpy(hC, dC, sizeof(int)*N*N, cudaMemcpyDeviceToHost);
-    int **C;
-    C = (int**)malloc(sizeof(int*)*N*N);
-    for(int i = 0; i < N; i++){*C = (int*)malloc(sizeof(int)*N); for(int j = 0; j<N;j++){C[i][j] = hC[i*N+j];}}
+    // cudaMemcpy(hC, dC, sizeof(int)*N*N, cudaMemcpyDeviceToHost);
+    // int **C;
+    // C = (int**)malloc(sizeof(int*)*N*N);
+    // for(int i = 0; i < N; i++){*C = (int*)malloc(sizeof(int)*N); for(int j = 0; j<N;j++){C[i][j] = hC[i*N+j];}}
 
-    cudaFree(dA);
-    cudaFree(dB);
-    cudaFree(dC);
+    // cudaFree(dA);
+    // cudaFree(dB);
+    // cudaFree(dC);
 
-    printf("Matrix A");
-    for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", A[i][j]);}}
-    printf("Matrix B");
-    for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", B[i][j]);}}
-    printf("Matrix C");
-    for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", C[i][j]);}}
+    // printf("Matrix A");
+    // for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", A[i][j]);}}
+    // printf("Matrix B");
+    // for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", B[i][j]);}}
+    // printf("Matrix C");
+    // for(int i = 0; i < N; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%d, ", C[i][j]);}}
 }
