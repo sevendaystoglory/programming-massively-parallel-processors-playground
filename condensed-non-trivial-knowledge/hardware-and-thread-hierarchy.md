@@ -31,3 +31,4 @@ In the matrixadd.cu script, we prefer converting all matrices to a row major lay
 ---
 ### Good Reads
 [how fast can we perform as froward pass](https://bounded-regret.ghost.io/how-fast-can-we-perform-a-forward-pass)
+[Cuda by Example](https://edoras.sdsu.edu/~mthomas/docs/cuda/cuda_by_example.book.pdf)
