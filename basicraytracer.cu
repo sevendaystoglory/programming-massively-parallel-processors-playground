@@ -24,7 +24,9 @@ struct Sphere{
     }
 };
 
-__global__ void raytrace(unsigned char * arr, Sphere * dS){ // each of my threads is generating one pixel using raytracing
+__constant__ Sphere dS[NUM_SPHERES]; // pointer to a sphere object, this will point to our device
+
+__global__ void raytrace(unsigned char * arr){ // each of my threads is generating one pixel using raytracing
     int x = threadIdx.x + blockDim.x * blockIdx.x;
     int y = threadIdx.y + blockDim.y * blockIdx.y;
     float ox = x;
@@ -33,7 +35,7 @@ __global__ void raytrace(unsigned char * arr, Sphere * dS){ // each of my thread
         int idx = x + y * blockDim.x * gridDim.x; // row major indexing to access arr
         float r = 0, g = 0, b = 0;
         float maxZ = -INF;
-        for(int i = 0; i < NUM_SPHERES; i++){ // for each sphere
+        for(int i = 0; i < NUM_SPHERES; i++){ // for each sphere. each of my threads in a warp is demanding the sphere essentials in the same order. If we define the sphere array at the file scope with a constant, and change the cudaMemcpy to cudaMemcpyToSymbol, we would be using the consant memory
             float n;
             float t = dS[i].hit(ox, oy, &n);
             if (t > maxZ){ // check if the ray projected orhogonally from ox,oy interects with it
@@ -52,15 +54,11 @@ __global__ void raytrace(unsigned char * arr, Sphere * dS){ // each of my thread
 }
 
 int main(){
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start, 0);
     unsigned char *dev_bitmap; 
     // allocate memory on the GPU for the output bitmap
     cudaMalloc( (void**)&dev_bitmap, DIM * DIM * sizeof(unsigned char) * 4); 
     // allocate memory for the Sphere dataset
-    Sphere *dS; // pointer to a sphere object, this will point to our device
+    
     cudaMalloc( (void**)&dS, sizeof(Sphere) * NUM_SPHERES );
     Sphere *temp_s = (Sphere*)malloc( sizeof(Sphere) * NUM_SPHERES);
     for (int i=0; i<NUM_SPHERES; i++) {
@@ -73,12 +71,23 @@ int main(){
     temp_s[i].radius = rnd( 400.0f ) + 20;
     };
 
-    cudaMemcpy(dS, temp_s, sizeof(Sphere) * NUM_SPHERES, cudaMemcpyHostToDevice);
+    cudaMemcpyToSymbol(dS, temp_s, sizeof(Sphere) * NUM_SPHERES);
     free(temp_s);
 
     dim3 gridDim(DIM / 16, DIM / 16);
     dim3 blockDim(16, 16);
-    raytrace<<<gridDim, blockDim>>>(dev_bitmap, dS); // my image is being tiled by blocks
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start, 0);
+    raytrace<<<gridDim, blockDim>>>(dev_bitmap); // my image is being tiled by blocks
+    cudaEventRecord(stop, 0);
+    cudaEventSynchronize(stop);
+
+    float elapsed_time;
+    cudaEventElapsedTime(&elapsed_time, start, stop);
+
+    printf("\nElapsed Time: %f\n", elapsed_time);
 
     cudaDeviceSynchronize;
     unsigned char *host_bitmap = (unsigned char *)malloc(DIM * DIM * sizeof(unsigned char) * 4);
