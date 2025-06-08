@@ -1,6 +1,6 @@
 #include <stdio.h>
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "local_libraries/stb_image_write.h"
+#include "../local_libraries/stb_image_write.h"
 
 #define INF 2e10f
 #define NUM_SPHERES 20
