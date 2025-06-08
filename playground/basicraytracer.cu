@@ -89,7 +89,7 @@ int main(){
 
     printf("\nElapsed Time: %f\n", elapsed_time);
 
-    cudaDeviceSynchronize;
+    cudaDeviceSynchronize();
     unsigned char *host_bitmap = (unsigned char *)malloc(DIM * DIM * sizeof(unsigned char) * 4);
     cudaMemcpy(host_bitmap, dev_bitmap, DIM * DIM * sizeof(unsigned char)*4, cudaMemcpyDeviceToHost);
     stbi_write_png("ray_trace.png", DIM, DIM, 4, host_bitmap, DIM * 4);

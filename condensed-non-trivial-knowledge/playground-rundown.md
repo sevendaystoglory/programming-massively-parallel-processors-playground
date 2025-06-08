@@ -8,3 +8,8 @@ following are the kernels inplemented in the playground:
 [4.B]-OPTIMIZATION 2: Tiled Matrix Mutliplication: We are going to use the fact that each element of either A or B is used N times, however we are fetching it exactly N times from the DRAM :( Only if we could store it somewhere in the L1 cache :) Each thread in my block (kxk, let) fetches each corresponding element from tiles on A and B. Also, we no longer fetch an entire row/column per thread from the global memory. What we do is let each thread first move the tiles to shared memory so that each thread could use these elements again in the kernel. It takes **0.000380s.**. We are now x5 faster! Check out [matmultiled.cu](../playground/matmultiled.cu).
 
 OPTIMIZATION 3: Using Pinned Memory: Using cudaMallocHost will reserve pinned memory (locks pages in RAM so they can't be swapped out) in the CPU RAM so that the operation cudaMemcpy is faster.
+
+5. [basicraytracer.cu](../playground/basicraytracer.cu) implements a simple orthogonal raytracer kernel. We also get to work with constant memory and shave off 30% of rendering time. I've plans on how to procees with improving the kernel. Here it goes.
+5.1: Image Quality -- 5.1.a: add perspective camera; 5.1.a: simple phong shading; 5.1.c hard shadows; 5.1.d anti-aliasing.
+5.2: Speed Optimizations -- coalesing AoS to SoA, __launch_bounds__, measure occupancy and memory stalls w/ nsight compute.
+5.3: Acceleration -- build a BVH, traverse the BVH instead of traversing every sphere.
