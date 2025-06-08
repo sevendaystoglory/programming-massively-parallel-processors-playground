@@ -3,3 +3,4 @@ basic.c
 basic.cu
 kernel.sh
 ray_trace.png
+local_libraries/
