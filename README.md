@@ -1,5 +1,5 @@
 # programming-massively-parallel-processors-playground
-cuda-c will no longer be a blackbox. 
+cuda/c will no longer be a blackbox. 
 
 i am following the nvidia docs only : https://docs.nvidia.com/cuda/pdf/CUDA_C_Programming_Guide.pdf (2025)
 reading order:
