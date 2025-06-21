@@ -53,6 +53,9 @@ __device__ float perimeter(float x):{
     return 2 * x * 3.1415826535897932; // BAD!!
 }
 ```
+Q. What is CuBLAS, and SGEMM?
+A. We could've very easily renamed all our matmul kernels to a fancier - SGEMM, because it very literally stands for single precision general matrix multiplication. 
+CuBLAS is just the CUDA implementation for basic linear algebra subprograms. In simple terms this library exposes basic methods such as vector addition and dot product an matrix multiplication as ready-to-use APIs.  
 
 C/C++ implicitly assumes that 3.14.. is a double literal. Even though x is float, the product converts to double and since the return type is float we again truncate the result back to float. These conversions when happening across all threads slow down the computation. Better to write 3.14..f, which prevents unintentionally pulling in double math.
 
@@ -60,3 +63,4 @@ C/C++ implicitly assumes that 3.14.. is a double literal. Even though x is float
 ### Good Reads
 [how fast can we perform as froward pass](https://bounded-regret.ghost.io/how-fast-can-we-perform-a-forward-pass)
 [Cuda by Example](https://edoras.sdsu.edu/~mthomas/docs/cuda/cuda_by_example.book.pdf)
+[How to Optimize a CUDA Matmul Kernel for cuBLAS-like Performance](https://siboehm.com/articles/22/CUDA-MMM)
