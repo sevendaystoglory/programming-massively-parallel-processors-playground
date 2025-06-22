@@ -1,112 +1,191 @@
-//implements tiled matmul with register cache
+#include <cstdio>
+#include <cstdlib>
+#include <cassert>
+#include <cuda_runtime.h>
 
-#include <stdio.h>
+#define CEIL_DIV(M,N)  (((M) + (N) - 1) / (N))
 
-#define N 1<<10
-#define M 1<<10
-#define K 1<<10
-#define tile_size 128
-#define BK 8
+constexpr int M_GLOBAL = 1 << 10;   // rows of C and A
+constexpr int N_GLOBAL = 1 << 10;   // cols of C and B
+constexpr int K_GLOBAL = 1 << 10;   // common dim
 
+constexpr int BM = 128;     // rows  computed by one thread-block
+constexpr int BN = 128;     // columns computed by one thread-block
+constexpr int BK = 8;       // K depth for each iteration
+constexpr int TM = 8;       // rows of C each thread produces
+constexpr int TN = 8;       // cols of C each thread produces
 
-void printMatrices(float* A, float* B, float* C);
+#define CUDA_CHECK(call)                                              \
+    do {                                                              \
+        cudaError_t status = (call);                                  \
+        if (status != cudaSuccess) {                                  \
+            fprintf(stderr, "CUDA error %s at %s:%d\n",               \
+                    cudaGetErrorString(status), __FILE__, __LINE__);  \
+            std::exit(EXIT_FAILURE);                                  \
+        }                                                             \
+    } while (0)
 
-__global__ void matmul(float* A, float* B, float* C){
-    __shared__ float sA[tile_size*BK];
-    __shared__ float sB[BK*tile_size];
+#define CUDA_KERNEL_CHECK()  CUDA_CHECK(cudaGetLastError())
 
-    // now think along these lines: We are multiplying two tile_size x BK, and BK x tile_size matrices.
-    // we are going to tile these matrices using our micro tiles. we have fixed: BK x BK of these (from the blockDim)
-    // register micro block tile is 1 dimensional if you think about it.
-    const int micro_tile_size = tile_size / BK;
-    const int micro_block_size = micro_tile_size * micro_tile_size;
-    float threadResults[micro_block_size] = {0.0}; // register storage to store the results.
-    float regA[micro_tile_size] = {0.0};
-    float regB[micro_tile_size] = {0.0};
+template<int BM_, int BN_, int BK_, int TM_, int TN_>
+__global__ void __launch_bounds__((BM_ * BN_) / (TM_ * TN_), 1)
+sgemm2DBlocktiling(int M, int N, int K,
+                   float alpha,
+                   const float * __restrict__ A,
+                   const float * __restrict__ B,
+                   float beta,
+                   float *C)
+{
+    // ---------------- block identification ----------------
+    const uint cRow = blockIdx.y;   // which BM-high tile of C
+    const uint cCol = blockIdx.x;   // which BN-wide  tile of C
 
-    int tx = threadIdx.x; int ty = threadIdx.y;
-    int bx = blockIdx.x; int by = blockIdx.y;
-    // i and j are global indices
-    int i = ty + blockDim.y * by; 
-    int j = tx + blockDim.x * bx;
-    // we start by copying data from A and B to shared memory
-    for(int phase = 0; phase < K; phase+=BK){ // iterate over common dimension of the matrix
-        // we have lower threads than there are elements in sA. So we must loop. Now we have BK x BK as each micro_tile
-        for(int A_offset = 0; A_offset < tile_size; A_offset+=BK){
-            int tty = (ty + A_offset); int ttx = tx; //read ttx as 'translated tx' since threads to tile is no longer an onto mapping. We must transform to use.
-            sA[tty*BK + ttx] = A[i*K + phase*BK + ttx];
-        }
-        for(int B_offset = 0; B_offset < tile_size; B_offset+=BK){
-            int tty = (ty + B_offset); int ttx = tx;
-            sB[tty*BK + ttx] = B[(phase*BK+ty)*N+j]; //store in row major layout in sB as well as sA
-        }
-        __syncthreads(); //we've successfully populated sA and sB for a block
-    
-        // if we exlude the 'offset' variable from accessing of A and B above, alternatively we could add that condition here to advance our blocktile along the common dimension
-        // like this
-        // A += BK;     // move BK columns to right
-        // B += BK * N; // move BK rows down
+    // ---------------- thread identification ---------------
+    constexpr uint totalResultsBlock   = BM_ * BN_;
+    constexpr uint resultsPerThread    = TM_ * TN_;
+    constexpr uint threadsPerBlock     = totalResultsBlock / resultsPerThread;
 
-        // calculate per-thread results
-        
-        for(int a = 0; a < (micro_block_size); a++){ // this loop will iterate over a single micro-tile
-            regA[a] = sA[ty*micro_block_size + a];
-            regB[a] = sB[tx*micro_block_size + a];
-        }
-        // we'll now be computing outer product of regA and regB to populate threadResults. 
-        for(int a = 0; a < micro_tile_size; a++){ // note: i,j  span a microtile.
-            for(int b = 0; b < micro_tile_size; b++){
-                threadResults[a*BK + b] = regA[a] * regB[b];
-            }
-        }
+    // 1-D threadIdx.x → 2-D (threadRow, threadCol) inside the block-tile
+    const uint threadCol = threadIdx.x % (BN_ / TN_);
+    const uint threadRow = threadIdx.x / (BN_ / TN_);
+
+    // ---------------- shared memory -----------------------
+    extern __shared__ float smem[];
+    float *As = smem;                         // size BM_ × BK_
+    float *Bs = As + BM_ * BK_;               // size BK_ × BN_
+
+    // ---------------- handy constants --------------------
+    const float *Abase = A + cRow * BM_ * K;      // start of this A-tile
+    const float *Bbase = B + cCol * BN_;          // start of this B-tile
+    float       *Cbase = C + cRow * BM_ * N
+                           + cCol * BN_;          // start of this C-tile
+
+    // ---------------- indices each thread loads ----------
+    const uint innerRowA = threadIdx.x / BK_;
+    const uint innerColA = threadIdx.x % BK_;
+    const uint strideA   = threadsPerBlock / BK_;
+
+    const uint innerRowB = threadIdx.x / BN_;
+    const uint innerColB = threadIdx.x % BN_;
+    const uint strideB   = threadsPerBlock / BN_;
+
+    // ---------------- registers --------------------------
+    float threadResults[TM_ * TN_] = {0.f};
+    float regM[TM_];
+    float regN[TN_];
+
+    // ---------------- loop over the K dimension ----------
+    for (uint bk = 0; bk < static_cast<uint>(K); bk += BK_) {
+
+        // ---- load A sub-tile ------------------------------------------------
+        for (uint r = innerRowA; r < BM_; r += strideA)
+            As[r * BK_ + innerColA] = Abase[(r * K) + bk + innerColA];
+
+        // ---- load B sub-tile ------------------------------------------------
+        for (uint r = innerRowB; r < BK_; r += strideB)
+            Bs[r * BN_ + innerColB] = Bbase[(bk + r) * N + innerColB];
+
         __syncthreads();
 
-        // write the results to C
-        for(int a = 0; a < micro_tile_size; a++){
-            for(int b = 0; b < micro_tile_size; b++){
-                C[(i + a)*tile_size+ j+b] += threadResults[a*micro_tile_size + b];
+        // ---- compute outer product ----------------------------------------
+        #pragma unroll
+        for (uint dot = 0; dot < BK_; ++dot) {
+
+            #pragma unroll
+            for (uint i = 0; i < TM_; ++i)
+                regM[i] = As[(threadRow * TM_ + i) * BK_ + dot];
+
+            #pragma unroll
+            for (uint j = 0; j < TN_; ++j)
+                regN[j] = Bs[dot * BN_ + threadCol * TN_ + j];
+
+            #pragma unroll
+            for (uint i = 0; i < TM_; ++i)
+                #pragma unroll
+                for (uint j = 0; j < TN_; ++j)
+                    threadResults[i * TN_ + j] += regM[i] * regN[j];
+        }
+        __syncthreads();
+    }
+
+    // ---------------- store the block-tile back to GMEM ---------------------
+    #pragma unroll
+    for (uint i = 0; i < TM_; ++i)
+        #pragma unroll
+        for (uint j = 0; j < TN_; ++j) {
+            uint row = threadRow * TM_ + i;
+            uint col = threadCol * TN_ + j;
+            if (row < static_cast<uint>(M) && col < static_cast<uint>(N)) {
+                Cbase[row * N + col] =
+                    alpha * threadResults[i * TN_ + j] +
+                    beta  * Cbase[row * N + col];
             }
         }
-    }
-    
-
 }
 
-int main(){
-    float *hA = (float*)malloc(N*N*sizeof(float));
-    float *hB = (float*)malloc(N*N*sizeof(float));
-    float *hC = (float*)malloc(M*N*sizeof(float));
-    for(int i = 0; i<M*N; i++){hA[i] = rand()%15;}
-    for(int i = 0; i<M*N; i++){hB[i] = rand()%15;}
-    for(int i = 0; i<M*N; i++){hB[i] = 0;}
+// -----------------------------------------------------------------------------
+// main() – allocates matrices, runs the kernel once, prints timing & a sample
+// -----------------------------------------------------------------------------
+int main()
+{
+    // ------------- host allocation -----------------------------------------
+    const size_t bytesA = size_t(M_GLOBAL) * K_GLOBAL * sizeof(float);
+    const size_t bytesB = size_t(K_GLOBAL) * N_GLOBAL * sizeof(float);
+    const size_t bytesC = size_t(M_GLOBAL) * N_GLOBAL * sizeof(float);
 
+    float *hA = static_cast<float*>(malloc(bytesA));
+    float *hB = static_cast<float*>(malloc(bytesB));
+    float *hC = static_cast<float*>(malloc(bytesC));
+
+    // ------------- initialise A & B with random data -----------------------
+    for (size_t i = 0; i < (M_GLOBAL * K_GLOBAL); ++i) hA[i] = rand() / float(RAND_MAX);
+    for (size_t i = 0; i < (K_GLOBAL * N_GLOBAL); ++i) hB[i] = rand() / float(RAND_MAX);
+    for (size_t i = 0; i < (K_GLOBAL * N_GLOBAL); ++i) hC[i] = 0;
+    
+
+    // ------------- device allocation --------------------------------------
     float *dA, *dB, *dC;
-    cudaMalloc(&dA, sizeof(float)*M*N);
-    cudaMalloc(&dB, sizeof(float)*M*N);
-    cudaMalloc(&dC, sizeof(float)*M*N);
+    CUDA_CHECK(cudaMalloc(&dA, bytesA));
+    CUDA_CHECK(cudaMalloc(&dB, bytesB));
+    CUDA_CHECK(cudaMalloc(&dC, bytesC));
 
-    cudaMemcpy(dA, hA, sizeof(float)*M*N, cudaMemcpyHostToDevice);
-    cudaMemcpy(dB, hB, sizeof(float)*M*N, cudaMemcpyHostToDevice);
-    cudaMemcpy(dC, hC, sizeof(float)*M*N, cudaMemcpyHostToDevice);
-    
-    dim3 blockDim(tile_size,tile_size); // each thread is to handle 8x8 elemnts of a micro tile. Each tile will have 16x16 microtiles. Size = 128x128
-    dim3 gridDim(M/tile_size +1, N/tile_size + 1);
-    matmul<<<gridDim, blockDim>>>(dA, dB, dC);
+    CUDA_CHECK(cudaMemcpy(dA, hA, bytesA, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(dB, hB, bytesB, cudaMemcpyHostToDevice));
+    CUDA_CHECK(cudaMemcpy(dC, hC, bytesC, cudaMemcpyHostToDevice));
 
-    
-    cudaMemcpy(hC, dC, sizeof(float)*M*N, cudaMemcpyDeviceToHost);
-    // printMatrices(hA, hB, hC);
-    cudaFree(dA);
-    cudaFree(dB);
-    cudaFree(dC);
-}
+    // ------------- launch configuration -----------------------------------
+    dim3 blockDim((BM * BN) / (TM * TN));   // 256 threads
+    dim3 gridDim(CEIL_DIV(N_GLOBAL, BN),
+                 CEIL_DIV(M_GLOBAL, BM));
 
+    const size_t shmemBytes = (BM * BK + BK * BN) * sizeof(float);
 
-void printMatrices(float* A, float* B, float* C){
-    printf("\nMatrix A");
-    for(int i = 0; i < M; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%f, ", A[i*N +j]);}}
-    printf("\nMatrix B");
-    for(int i = 0; i < M; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%f, ", B[i*N +j]);}}
-    printf("\nMatrix C");
-    for(int i = 0; i < M; i++){for(int j = 0; j < N; j++){if(j == 0)printf("\n");printf("%f, ", C[i*N +j]);}}
+    // ------------- run once & time it -------------------------------------
+    cudaEvent_t t0, t1;
+    CUDA_CHECK(cudaEventCreate(&t0));
+    CUDA_CHECK(cudaEventCreate(&t1));
+    CUDA_CHECK(cudaEventRecord(t0));
+
+    sgemm2DBlocktiling<BM, BN, BK, TM, TN>
+        <<<gridDim, blockDim, shmemBytes>>>
+        (M_GLOBAL, N_GLOBAL, K_GLOBAL,
+         1.0f, dA, dB, 0.0f, dC);
+
+    CUDA_KERNEL_CHECK();
+    CUDA_CHECK(cudaEventRecord(t1));
+    CUDA_CHECK(cudaEventSynchronize(t1));
+
+    float ms = 0.f;
+    CUDA_CHECK(cudaEventElapsedTime(&ms, t0, t1));
+    printf("SGEMM  %dx%d × %dx%d  finished in %.3f ms\n",
+           M_GLOBAL, K_GLOBAL, K_GLOBAL, N_GLOBAL, ms);
+
+    // ------------- read back one element so we know it worked --------------
+    CUDA_CHECK(cudaMemcpy(hC, dC, sizeof(float), cudaMemcpyDeviceToHost));
+    printf("C[0,0] = %f\n", hC[0]);
+
+    // ------------- tidy up -------------------------------------------------
+    cudaFree(dA); cudaFree(dB); cudaFree(dC);
+    free(hA); free(hB); free(hC);
+    return 0;
 }
