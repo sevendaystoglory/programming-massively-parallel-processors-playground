@@ -61,6 +61,7 @@ C/C++ implicitly assumes that 3.14.. is a double literal. Even though x is float
 
 ---
 ### Good Reads
-[how fast can we perform as froward pass](https://bounded-regret.ghost.io/how-fast-can-we-perform-a-forward-pass)
-[Cuda by Example](https://edoras.sdsu.edu/~mthomas/docs/cuda/cuda_by_example.book.pdf)
-[How to Optimize a CUDA Matmul Kernel for cuBLAS-like Performance](https://siboehm.com/articles/22/CUDA-MMM)
+[how fast can we perform as froward pass](https://bounded-regret.ghost.io/how-fast-can-we-perform-a-forward-pass)</br>
+[Cuda by Example](https://edoras.sdsu.edu/~mthomas/docs/cuda/cuda_by_example.book.pdf)</br>
+[How to Optimize a CUDA Matmul Kernel for cuBLAS-like Performance](https://siboehm.com/articles/22/CUDA-MMM)</br>
+[Basic facts about GPUs](https://damek.github.io/random/basic-facts-about-gpus/#fnref:0)
