@@ -1,19 +1,19 @@
 #include <stdio.h>
 #include <time.h>
 
-#define N (1<<10)
+#define N (1<<12)
 #define tile_size 16
 
 void printMatrices(int A[N][N], int B[N][N], int C[N][N]);
 
 __global__ void matMulTiled(int *A, int *B, int*C){
 
-    // allocate some memory
+    // allocate some memory. This will be shared across a single block. ( Size  == blocksize )
     __shared__ int A_tile[tile_size][tile_size];
     __shared__ int B_tile[tile_size][tile_size];
 
     // these are the row_num and col_num of the matrix C
-    int tx = threadIdx.x; int bx = blockIdx.x;
+    int tx = threadIdx.x; int bx = blockIdx.x; // lets see if a warp (characterized by different values of ThreadIdx.x) is accessing coalesced GMEM. Keep everything constant and change tx. 
     int ty = threadIdx.y; int by = blockIdx.y;
     // working on C[i][j]
     int i = ty + blockDim.y * by;
@@ -22,8 +22,8 @@ __global__ void matMulTiled(int *A, int *B, int*C){
     int value = 0;
     for(int phase = 0; phase < N / tile_size; phase++){ 
             // start loading to shared memory: indexed by tx, ty
-            A_tile[ty][tx] = A[i*N + phase*tile_size + tx];
-            B_tile[ty][tx] = B[(phase*tile_size+ty)*N+j];
+            A_tile[ty][tx] = A[i*N + phase*tile_size + tx]; // assuming that A is row major.From this we could see that we indeed are accessing contiguous memory from matrix B. (changing tx)
+            B_tile[ty][tx] = B[(phase*tile_size+ty)*N+j]; // assuming that B is also row major. From this we could see that we indeed are accessing contiguous memory from matrix B. (changing j)
             __syncthreads(); // wait for all threads in a block
 
             for(int k=0; k < tile_size; k++){
@@ -55,7 +55,7 @@ int main(){
     cudaMemcpy(dA, hA, sizeof(int)*N*N, cudaMemcpyHostToDevice);
     cudaMemcpy(dB, hB, sizeof(int)*N*N, cudaMemcpyHostToDevice);
     
-    dim3 blockDim(tile_size, tile_size);
+    dim3 blockDim(tile_size, tile_size); // blocksize here is 16 x 16. This means that in our warp of 32 only half is scheduled by the warp scheduler to access the GMEM. We could prevent this (although not much of an issue to begin with) by considering a block of 32 x 8 , as standard.
     dim3 gridDim(N / tile_size + 1, N / tile_size + 1);
     clock_t start = clock();
     matMulTiled<<<gridDim,  blockDim>>>(dA, dB, dC);
